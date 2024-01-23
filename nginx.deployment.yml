@@ -1,0 +1,77 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-pvc
+spec:
+  resources:
+    requests:
+      storage: "20Mi"
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs
+---
+# Deployment d)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx
+  labels:
+    app: my-nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-nginx
+  template:
+    metadata:
+      name: my-nginx
+      labels:
+        app: my-nginx
+    spec:
+      containers:
+        - name: my-nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "200m"
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html
+              name: html
+              readOnly: true
+        # job container f)
+        - name: updater
+          image: alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - "while true; do date >> /html/index.html; echo '<br>' >> /html/index.html; sleep 10; done"
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: "200m"
+          volumeMounts:
+            - mountPath: /html
+              name: html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: my-pvc
+---
+# Service e)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-loadbalancer
+  labels:
+    app: my-nginx
+
+spec:
+  type: LoadBalancer
+  selector:
+    app: my-nginx
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
